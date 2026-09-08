@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Control Servos BT</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --bg-2: #161a2e;
+    --accent: #4f8cff;
+    --accent-2: #2fd18b;
+    --danger: #ff5566;
+    --text: #eef1f7;
+    --muted: #8891a8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    background: linear-gradient(180deg, var(--bg-2), transparent);
+  }
+  .topbar h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+    letter-spacing: 0.3px;
+  }
+  .status-pill {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(255,85,102,0.15);
+    color: var(--danger);
+    border: 1px solid rgba(255,85,102,0.35);
+    transition: all 0.25s ease;
+  }
+  .status-pill.connected {
+    background: rgba(47,209,139,0.15);
+    color: var(--accent-2);
+    border-color: rgba(47,209,139,0.35);
+  }
+  .gear-btn {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--bg-2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .gear-btn:active { transform: scale(0.9) rotate(20deg); background: #1f2440; }
+  .gear-btn svg { width: 22px; height: 22px; fill: var(--text); }
+
+  .main {
+    height: calc(100% - 78px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 0 24px;
+  }
+
+  .main-button {
+    width: 210px; height: 210px;
+    border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle at 30% 30%, #6ba2ff, var(--accent) 60%, #2f5fc7);
+    box-shadow: 0 12px 30px rgba(79,140,255,0.35), inset 0 -6px 12px rgba(0,0,0,0.25);
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.2s ease;
+  }
+  .main-button:active {
+    transform: scale(0.94);
+    box-shadow: 0 6px 16px rgba(79,140,255,0.35), inset 0 -4px 8px rgba(0,0,0,0.3);
+  }
+  .main-button:disabled {
+    filter: grayscale(0.7) brightness(0.6);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    max-width: 260px;
+  }
+
+  .sheet-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: flex-end;
+    z-index: 50;
+  }
+  .sheet-overlay.open { display: flex; }
+  .sheet {
+    width: 100%;
+    background: var(--bg-2);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.28s ease;
+  }
+  .sheet-overlay.open .sheet { transform: translateY(0); }
+  .sheet-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .sheet-header h2 { font-size: 16px; margin: 0; }
+  .sheet-header button {
+    background: none; border: none; color: var(--muted);
+    font-size: 14px; cursor: pointer;
+  }
+  .device-list {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .device-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px;
+    background: #1c2140;
+    border-radius: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .device-item:active { border-color: var(--accent); }
+  .device-name { font-size: 14px; font-weight: 600; }
+  .device-addr { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .empty-msg, .loading-msg {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 30px 0;
+  }
+  .refresh-btn {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--accent);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1c2140;
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    opacity: 0;
+    transition: all 0.25s ease;
+    pointer-events: none;
+    z-index: 100;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1>Control de Servos</h1>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="status-pill" id="statusPill">Desconectado</span>
+      <button class="gear-btn" id="gearBtn" aria-label="Configurar Bluetooth">
+        <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <button class="main-button" id="mainBtn" disabled>ACTIVAR</button>
+    <p class="hint" id="hintText">Tocá el engranaje para conectar el módulo Bluetooth (HC-05 / HC-06)</p>
+  </div>
+
+  <div class="sheet-overlay" id="sheetOverlay">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2>Dispositivos emparejados</h2>
+        <button id="closeSheet">Cerrar</button>
+      </div>
+      <div class="device-list" id="deviceList">
+        <div class="loading-msg">Buscando dispositivos...</div>
+      </div>
+      <button class="refresh-btn" id="refreshBtn">Actualizar lista</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  var gearBtn = document.getElementById('gearBtn');
+  var mainBtn = document.getElementById('mainBtn');
+  var sheetOverlay = document.getElementById('sheetOverlay');
+  var closeSheet = document.getElementById('closeSheet');
+  var refreshBtn = document.getElementById('refreshBtn');
+  var deviceList = document.getElementById('deviceList');
+  var statusPill = document.getElementById('statusPill');
+  var hintText = document.getElementById('hintText');
+  var toast = document.getElementById('toast');
+
+  var isConnected = false;
+  var connectedName = '';
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function () { toast.classList.remove('show'); }, 2200);
+  }
+
+  function setConnectedUI(name) {
+    isConnected = true;
+    connectedName = name || 'Dispositivo';
+    statusPill.textContent = connectedName;
+    statusPill.classList.add('connected');
+    mainBtn.disabled = false;
+    hintText.textContent = 'Conectado a ' + connectedName + '. Tocá el botón para activar los servos.';
+  }
+
+  function setDisconnectedUI() {
+    isConnected = false;
+    statusPill.textContent = 'Desconectado';
+    statusPill.classList.remove('connected');
+    mainBtn.disabled = true;
+    hintText.textContent = 'Tocá el engranaje para conectar el módulo Bluetooth (HC-05 / HC-06)';
+  }
+
+  function openSheet() {
+    sheetOverlay.classList.add('open');
+    loadPairedDevices();
+  }
+
+  function hideSheet() {
+    sheetOverlay.classList.remove('open');
+  }
+
+  gearBtn.addEventListener('click', openSheet);
+  closeSheet.addEventListener('click', hideSheet);
+  sheetOverlay.addEventListener('click', function (e) {
+    if (e.target === sheetOverlay) hideSheet();
+  });
+  refreshBtn.addEventListener('click', loadPairedDevices);
+
+  function loadPairedDevices() {
+    deviceList.innerHTML = '<div class="loading-msg">Buscando dispositivos...</div>';
+
+    if (typeof bluetoothSerial === 'undefined') {
+      deviceList.innerHTML = '<div class="empty-msg">Plugin Bluetooth no disponible.<br>Compilá la app con Cordova y el plugin cordova-plugin-bluetooth-serial.</div>';
+      return;
+    }
+
+    bluetoothSerial.list(function (devices) {
+      renderDeviceList(devices);
+    }, function () {
+      deviceList.innerHTML = '<div class="empty-msg">No se pudo obtener la lista de dispositivos.</div>';
+    });
+  }
+
+  function renderDeviceList(devices) {
+    if (!devices || devices.length === 0) {
+      deviceList.innerHTML = '<div class="empty-msg">No hay dispositivos emparejados.<br>Emparejá el HC-05/HC-06 desde los ajustes de Bluetooth del teléfono primero.</div>';
+      return;
+    }
+    deviceList.innerHTML = '';
+    devices.forEach(function (device) {
+      var item = document.createElement('div');
+      item.className = 'device-item';
+      item.innerHTML =
+        '<div>' +
+          '<div class="device-name">' + (device.name || 'Dispositivo desconocido') + '</div>' +
+          '<div class="device-addr">' + device.address + '</div>' +
+        '</div>' +
+        '<span style="color: var(--muted); font-size:18px;">›</span>';
+      item.addEventListener('click', function () {
+        connectToDevice(device);
+      });
+      deviceList.appendChild(item);
+    });
+  }
+
+  function connectToDevice(device) {
+    deviceList.innerHTML = '<div class="loading-msg">Conectando a ' + (device.name || device.address) + '...</div>';
+
+    bluetoothSerial.connect(device.address, function () {
+      setConnectedUI(device.name);
+      showToast('Conectado a ' + (device.name || device.address));
+      hideSheet();
+    }, function () {
+      deviceList.innerHTML = '<div class="empty-msg">No se pudo conectar. Verificá que el módulo esté encendido.</div>';
+    });
+  }
+
+  mainBtn.addEventListener('click', function () {
+    if (!isConnected || typeof bluetoothSerial === 'undefined') return;
+
+    mainBtn.disabled = true;
+
+    bluetoothSerial.write('A', function () {
+      showToast('Comando enviado');
+      setTimeout(function () { mainBtn.disabled = false; }, 400);
+    }, function () {
+      showToast('Error al enviar comando');
+      mainBtn.disabled = false;
+    });
+  });
+
+  document.addEventListener('deviceready', function () {
+    if (typeof bluetoothSerial === 'undefined') return;
+
+    bluetoothSerial.isEnabled(function () {
+    }, function () {
+      showToast('Activá el Bluetooth del teléfono');
+    });
+
+    bluetoothSerial.subscribeRawData ? null : null;
+  }, false);
+</script>
+</body>
+</html>
